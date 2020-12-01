@@ -16,10 +16,10 @@ spec:
       serviceAccountName: products-admin
       namespace: k8sinitiative
       containers:
-      - name: web-server
-        image: quay.io/didierofrivia/go-fetch-products:latest
-        env:
-        - name: PORT
-          value: "8080"
-        ports:
-        - containerPort: 8080
+        - name: web-server
+          image: damianpm/go-fetch-products:latest
+          env:
+            - name: PORT
+              value: "8080"
+          ports:
+            - containerPort: 8080
