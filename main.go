@@ -1,48 +1,85 @@
+/*
+
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
+	"flag"
 	"os"
 
-	"github.com/3scale/k8sapp-initiative/pkg/apis/k8sinitiative.3scale.net/v1alpha1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	k8sinitiativev1alpha1 "github.com/3scale/k8sapp-initiative/apis/k8sinitiative/v1alpha1"
+	k8sinitiativecontroller "github.com/3scale/k8sapp-initiative/controllers/k8sinitiative"
+	// +kubebuilder:scaffold:imports
 )
 
-var kubeconfig string
+var (
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
+)
+
+func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	utilruntime.Must(k8sinitiativev1alpha1.AddToScheme(scheme))
+	// +kubebuilder:scaffold:scheme
+}
 
 func main() {
+	var metricsAddr string
+	var enableLeaderElection bool
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+	flag.Parse()
 
-	ns := "k8sinitiative"
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	s := scheme.Scheme
-	v1alpha1.AddToScheme(s)
-
-	configuration := config.GetConfigOrDie()
-	cl, err := client.New(configuration, client.Options{Scheme: s})
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             scheme,
+		MetricsBindAddress: metricsAddr,
+		Port:               9443,
+		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   "af7f3d18.3scale.net",
+	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
+		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	listOps := []client.ListOption{
-		client.InNamespace(ns),
-	}
-
-	productList := &v1alpha1.ProductList{}
-	err = cl.List(context.TODO(), productList, listOps...)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error", err)
+	if err = (&k8sinitiativecontroller.ProductReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Product"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Product")
 		os.Exit(1)
 	}
+	// +kubebuilder:scaffold:builder
 
-	jsonData, err := json.MarshalIndent(productList, "", "  ")
-	if err != nil {
-		panic(err)
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
 	}
-	fmt.Printf(string(jsonData))
 }
