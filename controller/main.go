@@ -17,7 +17,10 @@ var kubeconfig string
 
 func main() {
 
-	ns := "k8sinitiative"
+	ns, ok := os.LookupEnv("NAMESPACE")
+	if !ok {
+		ns = "default"
+	}
 
 	s := scheme.Scheme
 	v1alpha1.AddToScheme(s)

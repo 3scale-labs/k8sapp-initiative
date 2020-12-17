@@ -52,8 +52,8 @@ func StartWebServer() {
 	http.HandleFunc(productsEndPoint, handleProductsPage)
 	fs := http.FileServer(http.Dir("./templates/styles"))
 	http.Handle("/templates/styles/", http.StripPrefix("/templates/styles/", fs))
-	port := os.Getenv("PORT")
-	if len(port) == 0 {
+	port, ok := os.LookupEnv("PORT")
+	if !ok {
 		panic("Environment variable PORT is not set")
 	}
 
@@ -82,10 +82,14 @@ func handleHomePage(w http.ResponseWriter, r *http.Request) {
 
 func handleProductsPage(w http.ResponseWriter, r *http.Request) {
 	result := v1alpha1.ProductList{}
+	ns, ok := os.LookupEnv("NAMESPACE")
+	if !ok {
+		ns = "default"
+	}
 
 	getErr := restClient.
 		Get().
-		Namespace("k8sinitiative").
+		Namespace(ns).
 		Resource("products").
 		Do().
 		Into(&result)

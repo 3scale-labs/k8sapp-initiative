@@ -16,10 +16,26 @@ spec:
       serviceAccountName: products-admin
       namespace: k8sinitiative
       containers:
-      - name: web-server
-        image: quay.io/didierofrivia/go-fetch-products:latest
-        env:
-        - name: PORT
-          value: "8080"
-        ports:
-        - containerPort: 8080
+        - name: web-server
+          image: quay.io/didierofrivia/go-fetch-products:latest
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: k8s-initiative-configmap
+                  key: namespace
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  -name: k8s-initiative-configmap
+                  key: web_server_port
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: config-volume
+              mountPath: "/config"
+              readOnly: true
+          volumes:
+            - name: config-volume
+              configMap:
+                name: k8s-initiative-configmap
